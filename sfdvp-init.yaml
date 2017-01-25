@@ -1,0 +1,94 @@
+heat_template_version: 2016-04-08
+
+description: >
+  This Template will install SolidFire Docker Volume Plugin (sfdvp) and configure
+
+parameters:
+ sf_endpoint:
+   type: string
+ sf_svip:
+   type: string
+ sf_account:
+   type: string
+
+resources:
+  sfdvpInstall:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+      - config: { get_resource: sfdvpConfig }
+      - config: { get_resource: sfdvpCommands }
+
+  sfdvpConfig:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        merge_how: 'dict(recurse_array,no_replace)+list(append)'
+        write_files:
+          - path: "/tmp/solidfire.json"
+            permissions: "0644"
+            owner: "root"
+            content: 
+              str_replace: 
+                template: |
+                  {
+                    "Endpoint": "s_endpoint",
+                    "SVIP": "s_svip",
+                    "TenantName": "s_account",
+                    "DefaultVolSz": 1,
+                    "InitiatorIFace": "default",
+                    "MountPoint": "/var/lib/solidfire/mount",
+                    "Types": [
+                       {"Type": "Bronze", "Qos": {"minIOPS": 101, "maxIOPS": 202, "burstIOPS": 404}},
+                       {"Type": "Silver", "Qos": {"minIOPS": 1001, "maxIOPS": 1501, "burstIOPS": 2001}},
+                       {"Type": "Gold", "Qos": {"minIOPS": 3001, "maxIOPS": 5001, "burstIOPS": 10001}}
+                    ]
+                  }
+                params:
+                  s_endpoint: { get_param: sf_endpoint }
+                  s_svip: { get_param: sf_svip }
+                  s_account: { get_param: sf_account }
+          - path: "/etc/systemd/system/sfdvp.service"
+            permissions: "0644"
+            owner: "root"
+            content: |
+              [Install]
+              WantedBy=multi-user.target
+
+              [Unit]
+              Description=sfDVP service
+              Before=docker.service
+              After=iscsid.service network.target
+              Requires=docker.service
+
+              [Service]
+              Restart=always
+              ExecStartPre=-/usr/bin/mkdir -p /root/go-work
+              Environment=GOPATH=/root/go-work
+              ExecStartPre=-/usr/bin/go get -u github.com/solidfire/solidfire-docker-driver
+              # temporary
+              #ExecStartPre=-/bin/rm -rf  /root/go-work/src/github.com/solidfire
+              #ExecStartPre=-/bin/ln -s ../ebalduf/solidfire-docker-driver/ /root/go-work/src/github.com/solidfire/solidfire-docker-driver
+              #ExecStartPre=-/usr/bin/go install -u github.com/ebalduf/solidfire-docker-driver
+              # end temporary
+              ExecStart=/root/go-work/bin/solidfire-docker-driver daemon start -v
+
+  sfdvpCommands:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          template: |
+            #!/bin/bash
+            # setup sfDVP
+            mkdir /var/lib/solidfire
+            mv /tmp/solidfire.json /var/lib/solidfire
+            systemctl daemon-reload
+            systemctl enable sfdvp
+            systemctl start sfdvp
+          params:
+            dummy-param: dummy
+
+outputs:
+  OS::stack_id:
+    value: {get_resource: sfdvpInstall}

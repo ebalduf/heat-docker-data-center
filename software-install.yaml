@@ -1,0 +1,127 @@
+heat_template_version: 2016-04-08
+
+description: >
+  This Template will install and do any generic config for the VM
+
+parameters:
+  default_username:
+    type: string
+
+resources:
+  softwareInstall:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+      - config: {get_resource: packageConfig}
+      - config: {get_resource: otherCommands}
+
+  packageConfig:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        merge_how: 'dict(recurse_array,no_replace)+list(append)'
+        yum_repos:
+          docker:
+            name: "dockerrepo"
+            baseurl: "https://packages.docker.com/1.12/yum/repo/main/centos/7"
+            enabled: true
+            gpgcheck: true
+            gpgkey: "https://sks-keyservers.net/pks/lookup?op=get&search=0xee6d536cf7dc86e2d7d56f59a178ac6c6238f52e"
+          epel:
+            name: "Extra Packages for Enterprise Linux 7 - x86_64"
+            baseurl: "http://download.fedoraproject.org/pub/epel/7/x86_64"
+            enabled: true
+            gpgcheck: true
+            gpgkey: "https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-7"
+        packages:
+          - epel-release
+          - docker-engine
+          - iscsi-initiator-utils
+          - jq
+          - wget
+          - git
+          - golang
+          - tar
+          - xz
+          - unzip
+          - curl
+          - ipset
+          - ntp
+          - ntpdate
+          - ntp-doc
+          - bind-utils
+        package_upgrade: true
+        write_files:
+          - path: "/usr/local/bin/balduf_format"
+            owner: "root"
+            permissions: "0755"
+            content: |
+              #!/bin/python
+              import json
+              from pprint import pprint
+              import argparse
+
+              parser = argparse.ArgumentParser(description='read large json and dump one field.')
+              parser.add_argument('file', type=argparse.FileType('r') )
+              parser.add_argument('field')
+              args = parser.parse_args()
+              with open(args.file.name) as data_file:
+                  data = json.load(data_file)
+
+              print unicode(data[args.field])
+          - path: "/etc/modules-load.d/overlay.conf"
+            permissions: "0644"
+            owner: "root"
+            content: |
+              overlay
+          - path: "/etc/systemd/system/docker.service.d/override.conf"
+            permissions: "0644"
+            owner: "root"
+            content: |
+              [Service]
+              ExecStart=
+              ExecStart=/usr/bin/dockerd --storage-driver=overlay
+          - path: "/usr/local/bin/ip-detect.sh"
+            permissions: "0755"
+            owner: "root"
+            content: |
+              #!/bin/sh
+              curl -fsSL http://169.254.169.254/latest/meta-data/local-ipv4
+
+  otherCommands:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          template: |
+            #!/bin/bash
+            # cloud-init doesn't seem to be setting the hostname correctly
+            HOSTNAME=$(curl -fsSL http://169.254.169.254/latest/meta-data/hostname);
+            hostnamectl set-hostname $HOSTNAME --transient
+            # annoying, but set the /etc/hosts so vdbench will work
+            curl -fsSL http://169.254.169.254/latest/meta-data/local-ipv4 >> /etc/hosts
+            echo -n " " >> /etc/hosts
+            hostname >> /etc/hosts
+            # need to allow DVPs to have access to ports
+            setenforce Permissive
+            sed -i 's/Defaults    requiretty/#Defaults    requiretty/g' /etc/sudoers
+            sed -i s/SELINUX=enforcing/SELINUX=permissive/g /etc/selinux/config
+            # allow sudo with no password
+            sed -i 's/%wheel  ALL=(ALL)       ALL/#%wheel  ALL=(ALL)       ALL/g' /etc/sudoers
+            sed -i 's/# %wheel        ALL=(ALL)       NOPASSWD: ALL/%wheel ALL=(ALL)       NOPASSWD/g' /etc/sudoers
+            # setup NTP
+            ntpdate pool.ntp.org
+            systemctl enable ntpd
+            systemctl start ntpd
+            # enable and start docker
+            systemctl enable docker
+            # note, we're not starting this here as we will reboot to pickup overlayFS once this is done.
+            # do this here as no docker group when user created
+            usermod -aG docker ebalduf
+            usermod -aG docker $additional_user
+          params:
+            $additional_user: { get_param: default_username }
+
+outputs:
+  OS::stack_id:
+    value: {get_resource: softwareInstall}

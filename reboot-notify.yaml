@@ -1,0 +1,64 @@
+heat_template_version: 2016-04-08
+
+description: >
+  This Template will install NetApp Docker Volume Plugin (NDVP) and configure
+
+parameters:
+  wait_cli:
+    type: string
+
+resources:
+  reboot_notify:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+      - config: { get_resource: notify_done_service }
+      - config: { get_resource: enable_notify_reboot }
+
+  enable_notify_reboot:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: |
+        #!/bin/bash
+        systemctl enable heat_notify_done.service
+        sleep 30
+        reboot
+
+  notify_done_service:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        merge_how: 'dict(recurse_array,no_replace)+list(append)'
+        write_files:
+          - path: "/var/tmp/heat-notify.sh"
+            permissions: "0755"
+            owner: "root"
+            content:
+              str_replace:
+                template: |
+                  #!/bin/bash
+                  MYIP=$(curl -fsSL http://169.254.169.254/latest/meta-data/local-ipv4)
+                  wc_notify --data-binary '{"status": "SUCCESS", "reason": "done", "data": "'$MYIP'"}'
+                  echo "Sent Completion to Heat - $MYIP"
+                  systemctl disable heat_notify_done.service
+                params:
+                  wc_notify: { get_param: wait_cli }
+          - path: "/etc/systemd/system/heat_notify_done.service"
+            permissions: "0644"
+            owner: "root"
+            content: |
+              [Install]
+              WantedBy=multi-user.target
+
+              [Unit]
+              Description=Notify Heat we're done
+              After=network.target
+
+              [Service]
+              Type=oneshot
+              ExecStart=-/var/tmp/heat-notify.sh
+
+outputs:
+  OS::stack_id:
+    value: { get_resource: reboot_notify }

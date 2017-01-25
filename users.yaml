@@ -1,0 +1,74 @@
+heat_template_version: 2016-04-08
+
+# NOTE: You don't need to pass the parameter explicitly from the
+# parent template, it can be specified via the parameter_defaults
+# in the resource_registry instead, if you want to override the default
+# and/or share values with other templates in the tree.
+parameters:
+  default_username:
+    type: string
+    default: ddc
+  extra_key:
+    type: string
+    default:
+      - "#--- empty added key ---"
+
+description: >
+  This file takes the keys that are passed to the instance and sets it
+  up to use those as the keys so root can ssh around the Mesos cluster.
+  Then it takes the extra_key passed to it and uses that for the 
+  default user (which it got from the passed in default_username).
+
+resources:
+  users:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+      - config: {get_resource: user_config}
+      - config: {get_resource: ssh_config}
+
+  user_config:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        merge_how: 'dict(recurse_array,no_replace)+list(append)'
+        system_info:
+          default_user:
+            name: { get_param: default_username }
+        users:
+        - default
+        - name: ebalduf
+          passwd: "$6$oW.qUNNr$48ynDsAwI5e67S0VmiVrvWJoPuGX7WtPluC80WfiD2DV/iarCz8ewVfEtqPiROUXIW6mkjRP5FqdZJx95becH/"
+          sudo: ALL=(ALL) NOPASSWD:ALL
+          ssh-authorized-keys:
+            - "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDkPxx58OlM866r7mZEALjpE0gq3qhmWK9LDjY5TRroVf8Einvji7io3zWCPWsX2lXDCxlBLm5CmN7pSlSL2C0VSTvFF8R2br3nb/wV2TLnU8fewTKuFE8PcjUf+p1zz0ZUGEKsBgG1pgK9hQOk5HzUA2N12jzR3V+QigjKibX9avUFfeutzue0DyNG7AYlTJ4OVg8zxAXjf/OAvbIStj+F4U9iqq+WYvrV/Ve4dl/Q5G+J5gLeOs2lI6kWi8Mu5MdFjVBwdivaJfzKOhiwd2BVePr7jizqnXeszD4sTMdbsIOXbTt8kgk48+CwLQhg5/qT5xwzbLcmfxZl8hGkb+vh ebalduf-LT@ebalduf-LT.local"
+            - "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDO7RGguqYOGwSN13r91URgkn04aY1rjrT7kae7s6IdCZA920dfch4Wr6mVDNNxt34T4leEhgFOcgYp649qqGPhFshIhv+CJ7YfcD8KqIxh+/WO97quwin668QsB80Tt1pSdqbIGFb8eYr5hNzFKwealuDIG9A/VSUYTp9U4hzfp6XTECA4LFTgvfw8Q32bLKFGMGmKnEizCAb9/znL/We2xnyIz1IDgviQI/3XQtcS4I0kNTyPzuwGw3GOWACYf5z67BI9kazytUfqu6/i4V1MuMyjRpsq0k4qGH3aJAKyI2LPOAfSVy7duBEwzZVFFb665TvA5yikPORy5XMeFGrnp4FPLWDlfi8Svyl+xGgNRXQdXzUzI9qzJiv+heTjOxLK/73rXDDcBpoMfRPXnvEajtySZ7W6MepSwjj/OHQGwNhynzUKP3YaosPynXn1gDsZNZ4v0fOTQR+darTpgx8mgv4wqTCvm/Z8Z9eo08jbxRckybkx/gNyDuvnUae7oLbqF77wcTHlx2u/C9nFpKe0JrfB+bH+/vwA1jEVAthFhiFx3s+6sRxL/6IBcUs37XJ93AXTEfmKA9P4GH1HE4ckxCJvEsglRHYsMScuwuRyiQuodg8HahIR7sjYeosXj/n8tnqjF6B0NCKueSrZvAfeEAY9/u2yTDdYJMgsFMWboQ== ebalduf@applelaptop.balduf.localdomain"
+        write_files:
+          - path: "/tmp/additional_keys"
+            owner: "root"
+            permissions: "0600"
+            content:
+              str_replace:
+                template: |
+                  <%key%>
+                params:
+                  <%key%>: { get_param: extra_key }
+
+  # Setup ssh key for the extra user to match the key installed for the
+  # default user, e.g that provided via the nova keypair on instance boot
+  ssh_config:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          template: |
+            #!/bin/bash
+            curl http://169.254.169.254/openstack/2012-08-10/meta_data.json -o /root/meta_data.json
+            cat /root/meta_data.json | jq -r ".keys[0].data" >> /root/.ssh/authorized_keys
+            cat /tmp/additional_keys >> /home/$user/.ssh/authorized_keys
+          params:
+            $user: { get_param: default_username }
+
+outputs:
+  OS::stack_id:
+    value: {get_resource: users}

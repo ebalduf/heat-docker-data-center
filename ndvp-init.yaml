@@ -1,0 +1,111 @@
+heat_template_version: 2016-04-08
+
+description: >
+  This Template will install NetApp Docker Volume Plugin (NDVP) and configure
+
+parameters:
+ ndvp_endpoint:
+   type: string
+ ndvp_svip:
+   type: string
+ ndvp_account:
+   type: string
+
+resources:
+  ndvpInstall:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+      - config: {get_resource: ndvpConfig}
+      - config: {get_resource: ndvpCommands}
+
+  ndvpConfig:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        merge_how: 'dict(recurse_array,no_replace)+list(append)'
+        write_files:
+          - path: "/etc/ndvp-solidfire-san.json"
+            permissions: "0644"
+            owner: "root"
+            content:
+              str_replace:
+                template: |
+                  {
+                     "version": 1,
+                     "storageDriverName": "solidfire-san",
+                     "debug": false,
+                     "Endpoint": "n_endpoint",
+                     "SVIP": "n_svip",
+                     "TenantName": "n_account",
+                     "DefaultVolSz": 1,
+                     "InitiatorIFace": "default",
+                     "Types": [
+                         {
+                             "Type": "Bronze",
+                             "Qos": {
+                                 "minIOPS": 100,
+                                 "maxIOPS": 200,
+                                 "burstIOPS": 400
+                             }
+                         },
+                         {
+                             "Type": "Silver",
+                             "Qos": {
+                                 "minIOPS": 1000,
+                                 "maxIOPS": 2000,
+                                 "burstIOPS": 2500
+                             }
+                         },
+                         {
+                             "Type": "Gold",
+                             "Qos": {
+                                 "minIOPS": 3000,
+                                 "maxIOPS": 4000,
+                                 "burstIOPS": 4500
+                             }
+                         }
+                     ]
+                  }
+                params:
+                  n_endpoint: { get_param: ndvp_endpoint }
+                  n_svip: { get_param: ndvp_svip }
+                  n_account: { get_param: ndvp_account }
+          - path: "/etc/systemd/system/ndvp.service"
+            permissions: "0644"
+            owner: "root"
+            content: |
+              [Install]
+              WantedBy=multi-user.target
+        
+              [Unit]
+              Description=nDVP service
+              Before=docker.service
+              After=iscsid.service network.target
+              Requires=docker.service
+        
+              [Service]
+              Restart=always
+              ExecStartPre=-/usr/bin/mkdir -p /netapp
+              ExecStartPre=-/usr/bin/wget https://github.com/NetApp/netappdvp/releases/download/v1.3/netappdvp-1.3.tar.gz -O /tmp/netappdvp-1.3.tar.gz
+              ExecStartPre=-/usr/bin/tar -zxvf /tmp/netappdvp-1.3.tar.gz -C /netapp
+              ExecStartPre=-/bin/chown root.root /netapp/netappdvp
+              ExecStart=/netapp/netappdvp --port=27609 --config=/etc/ndvp-solidfire-san.json
+
+  ndvpCommands:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          template: |
+            #!/bin/bash
+            # setup the DVPs
+            systemctl daemon-reload
+            systemctl enable ndvp
+            systemctl start ndvp
+          params:
+            dummy-param: dummy
+
+outputs:
+  OS::stack_id:
+    value: {get_resource: ndvpInstall}

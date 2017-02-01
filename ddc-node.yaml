@@ -25,8 +25,12 @@ parameters:
     default: solidfire
   root_size:
     type: number
-  node_name:
+  data_volume_size:
+    type: number
+    default: 3
+  data_volume_type:
     type: string
+    default: solidfire
 
 resources:
   root_vol:
@@ -57,10 +61,8 @@ resources:
   install_software:
     type: LIB::DDC::SoftwareInstall
 
-  sfdvp:
-    type: LIB::DDC::SfdvpInstall
-    properties:
-      sf_account: { get_param: node_name }
+  dvp:
+    type: LIB::DDC::dvpInstall
 
   server_init:
     type: OS::Heat::MultipartMime
@@ -70,7 +72,7 @@ resources:
         type: multipart
       - config: { get_resource: config_users }
         type: multipart
-      - config: { get_resource: sfdvp }
+      - config: { get_resource: dvp }
         type: multipart
       - config: { get_resource: reboot_notify }
         type: multipart
@@ -89,6 +91,19 @@ resources:
         - network: { get_param: network }
       user_data_format: SOFTWARE_CONFIG
       user_data: { get_resource: server_init }
+
+  datavolume:
+    type: OS::Cinder::Volume
+    properties:
+      size: { get_param: data_volume_size }
+      volume_type: { get_param: data_volume_type }
+
+  volume_attachment:
+    type: OS::Cinder::VolumeAttachment
+    properties:
+      volume_id: { get_resource: datavolume }
+      instance_uuid: { get_resource: server }
+      mountpoint: /dev/vdb
 
   floatingip:
     type: OS::Nova::FloatingIP
@@ -110,7 +125,10 @@ outputs:
     value: { get_attr: [ floatingip, ip ] }
   private_ip:
     description: Server Private IP address
-    value: { get_attr: [server, networks, { get_param: network }, 0]}
+    value: { get_attr: [ server, networks, { get_param: network }, 0]}
+  servername:
+    description: Name of the server
+    value: { get_attr: [ server, name ] }
   reported_ip:
     description: The IP address reported by the server once its ready
     value: { get_attr: [wait_cloud_init_done, data] }

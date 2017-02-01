@@ -4,11 +4,11 @@ description: >
   This Template will install NetApp Docker Volume Plugin (NDVP) and configure
 
 parameters:
- ndvp_endpoint:
+ dvp_endpoint:
    type: string
- ndvp_svip:
+ dvp_svip:
    type: string
- ndvp_account:
+ dvp_account:
    type: string
 
 resources:
@@ -68,9 +68,9 @@ resources:
                      ]
                   }
                 params:
-                  n_endpoint: { get_param: ndvp_endpoint }
-                  n_svip: { get_param: ndvp_svip }
-                  n_account: { get_param: ndvp_account }
+                  n_endpoint: { get_param: dvp_endpoint }
+                  n_svip: { get_param: dvp_svip }
+                  n_account: { get_param: dvp_account }
           - path: "/etc/systemd/system/ndvp.service"
             permissions: "0644"
             owner: "root"
@@ -86,11 +86,17 @@ resources:
         
               [Service]
               Restart=always
-              ExecStartPre=-/usr/bin/mkdir -p /netapp
-              ExecStartPre=-/usr/bin/wget https://github.com/NetApp/netappdvp/releases/download/v1.3/netappdvp-1.3.tar.gz -O /tmp/netappdvp-1.3.tar.gz
-              ExecStartPre=-/usr/bin/tar -zxvf /tmp/netappdvp-1.3.tar.gz -C /netapp
-              ExecStartPre=-/bin/chown root.root /netapp/netappdvp
-              ExecStart=/netapp/netappdvp --port=27609 --config=/etc/ndvp-solidfire-san.json
+              # --- build latest
+              ExecStartPre=-/usr/bin/mkdir -p /root/go-work
+              Environment=GOPATH=/root/go-work
+              ExecStartPre=-/usr/bin/go get -u github.com/NetApp/netappdvp
+              ExecStart=/root/go-work/bin/netappdvp --port=27609 --config=/etc/ndvp-solidfire-san.json
+              # --- use a release
+              #ExecStartPre=-/usr/bin/mkdir -p /netapp
+              #ExecStartPre=-/usr/bin/wget https://github.com/NetApp/netappdvp/releases/download/v1.3/netappdvp-1.3.tar.gz -O /tmp/netappdvp-1.3.tar.gz
+              #ExecStartPre=-/usr/bin/tar -zxvf /tmp/netappdvp-1.3.tar.gz -C /netapp
+              #ExecStartPre=-/bin/chown root.root /netapp/netappdvp
+              #ExecStart=/netapp/netappdvp --port=27609 --config=/etc/ndvp-solidfire-san.json
 
   ndvpCommands:
     type: OS::Heat::SoftwareConfig

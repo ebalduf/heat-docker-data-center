@@ -61,46 +61,40 @@ resources:
       - name: the_masters
       - name: the_DTRs
       - name: the_usernodes
+      - name: DTRnode_names
       - name: cluster_name
       config: |
         #!/usr/bin/bash
         PRIVATE_IP=$(curl -fsSL http://169.254.169.254/latest/meta-data/local-ipv4)
         PUBLIC_IP=$(curl -fsSL http://169.254.169.254/latest/meta-data/public-ipv4)
-        exit 0
-        docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp install --host-address $PRIVATE_IP --san ddc-1 --san $PUBLIC_IP --admin-username admin --admin-password solidfire
-        # Now get the oher masters checked in
-        cat << EOF > /tmp/masters.list
-          $the_masters
-        EOF
-        cat << EOF > /tmp/DTRs.list
-          $the_DTRs
-        EOF
-        cat << EOF > /tmp/usernodes.list
-          $the_usernodes
-        EOF
+        #exit 0
+        docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:2.0.2 install --host-address $PRIVATE_IP -san ddc-1 --san $PUBLIC_IP --admin-username admin --admin-password solidfire 
         docker swarm join-token manager | tail -n +3 > /tmp/manager_join
         docker swarm join-token worker | tail -n +3 > /tmp/worker_join
         chmod 700 /tmp/manager_join /tmp/worker_join
-        for master in `sed 's|\[||g;s|]||g;s|u'\''||g;s|'\''||g;s| ||g;s|,|\n|g' /tmp/masters.list | grep -v $PUBLIC_IP`; do
+        for master in `echo $the_masters | sed 's|\[||g;s|]||g;s|u'\''||g;s|'\''||g;s| ||g;s|,|\n|g' | grep -v $PUBLIC_IP`; do
           echo "Connecting DDC master node: " $master
           scp -o StrictHostKeyChecking=no /tmp/manager_join $user@$master:/tmp/manager_join
-          ssh -o StrictHostKeyChecking=no $user@$master 'chmod 700 /tmp/manager_join;chown root.root /tmp/manager_join; 
-                                                         chown root.root /tmp/manager_join;
+          ssh -o StrictHostKeyChecking=no $user@$master 'chmod 700 /tmp/manager_join;sudo chown root.root /tmp/manager_join; 
+                                                         sudo chown root.root /tmp/manager_join;
                                                          sudo bash /tmp/manager_join '
         done
-        for dtr in `sed 's|\[||g;s|]||g;s|u'\''||g;s|'\''||g;s| ||g;s|,|\n|g' /tmp/DTRs.list`; do
+        for dtr in `echo $the_DTRs | sed 's|\[||g;s|]||g;s|u'\''||g;s|'\''||g;s| ||g;s|,|\n|g'`; do
           echo "Connecting DDC DTR node: " $dtr
           scp -o StrictHostKeyChecking=no /tmp/worker_join $user@$dtr:/tmp/worker_join
-          ssh -o StrictHostKeyChecking=no $user@$dtr 'chmod 700 /tmp/worker_join; chown root.root /tmp/worker_join; 
-                                                      chown root.root /tmp/worker_join;
+          ssh -o StrictHostKeyChecking=no $user@$dtr 'chmod 700 /tmp/worker_join;sudo chown root.root /tmp/worker_join; 
+                                                      sudo chown root.root /tmp/worker_join;
                                                       sudo bash /tmp/worker_join '
         done
-        #docker run -it --rm docker/dtr install --dtr-external-url https://ddc-4.pm.solidfire.net --ucp-node ddc-4.pm.solidfire.net --ucp-username admin --ucp-insecure-tls --ucp-url https://172.27.31.149
-        for usernode in `sed 's|\[||g;s|]||g;s|u'\''||g;s|'\''||g;s| ||g;s|,|\n|g' /tmp/usernodes.list`; do
+        for dtrn in `echo $DTRnode_names | sed 's|\[||g;s|]||g;s|u'\''||g;s|'\''||g;s| ||g;s|,|\n|g'`; do
+          echo "Installing DTR on node: " $dtrn
+          docker run --rm docker/dtr install --dtr-external-url https://ddc-4.pm.solidfire.net --ucp-node $dtrn.pm.solidfire.net -ucp-username admin --ucp-password solidfire --ucp-insecure-tls --ucp-url https://${PUBLIC_IP}
+        done
+        for usernode in `echo $the_usernodes | sed 's|\[||g;s|]||g;s|u'\''||g;s|'\''||g;s| ||g;s|,|\n|g'`; do
           echo "Connecting DDC User node: " $usernode
           scp -o StrictHostKeyChecking=no /tmp/worker_join $user@$usernode:/tmp/worker_join
-          ssh -o StrictHostKeyChecking=no $user@$usernode 'chmod 700 /tmp/worker_join; chown root.root /tmp/worker_join; 
-                                                           chown root.root /tmp/worker_join;
+          ssh -o StrictHostKeyChecking=no $user@$usernode 'chmod 700 /tmp/worker_join;sudo chown root.root /tmp/worker_join; 
+                                                           sudo chown root.root /tmp/worker_join;
                                                            sudo bash /tmp/worker_join '
         done
 
@@ -120,6 +114,7 @@ resources:
         the_masters: { get_attr: [ DDC_master_group, public_ip ] }
         the_DTRs: { get_attr: [ DDC_DTR_group, public_ip ] }
         the_usernodes: { get_attr: [ DDC_user_nodes, public_ip ] }
+        DTRnode_names: { get_attr: [ DDC_DTR_group, servername ] }
         cluster_name: { get_param: 'OS::stack_name' }
 
   ddc_sg:
@@ -148,7 +143,6 @@ resources:
       resource_def:
           type: ddc-node.yaml
           properties:
-            node_name: "ddc-dtr-%index%"
             flavor: { get_param: flavor }
             image: { get_param: image }
             ssh_key: { get_attr: [ key_pair, name ] }
@@ -170,7 +164,6 @@ resources:
       resource_def:
           type: ddc-node.yaml
           properties:
-            node_name: "ddc-%index%"
             flavor: { get_param: flavor }
             image: { get_param: image }
             ssh_key: { get_attr: [ key_pair, name ] }
@@ -192,7 +185,6 @@ resources:
       resource_def:
           type: ddc-node.yaml
           properties:
-            node_name: "ddc-user-nodes"
             flavor: { get_param: flavor }
             image: { get_param: image }
             ssh_key: { get_attr: [ key_pair, name ] }

@@ -4,11 +4,11 @@ description: >
   This Template will install SolidFire Docker Volume Plugin (sfdvp) and configure
 
 parameters:
- sf_endpoint:
+ dvp_endpoint:
    type: string
- sf_svip:
+ dvp_svip:
    type: string
- sf_account:
+ dvp_account:
    type: string
 
 resources:
@@ -45,9 +45,9 @@ resources:
                     ]
                   }
                 params:
-                  s_endpoint: { get_param: sf_endpoint }
-                  s_svip: { get_param: sf_svip }
-                  s_account: { get_param: sf_account }
+                  s_endpoint: { get_param: dvp_endpoint }
+                  s_svip: { get_param: dvp_svip }
+                  s_account: { get_param: dvp_account }
           - path: "/etc/systemd/system/sfdvp.service"
             permissions: "0644"
             owner: "root"

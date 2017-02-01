@@ -22,11 +22,11 @@ resources:
         merge_how: 'dict(recurse_array,no_replace)+list(append)'
         yum_repos:
           docker:
-            name: "dockerrepo"
-            baseurl: "https://packages.docker.com/1.12/yum/repo/main/centos/7"
+            name: "Docker Repository"
+            baseurl: "https://yum.dockerproject.org/repo/main/centos/7/"
             enabled: true
             gpgcheck: true
-            gpgkey: "https://sks-keyservers.net/pks/lookup?op=get&search=0xee6d536cf7dc86e2d7d56f59a178ac6c6238f52e"
+            gpgkey: "https://yum.dockerproject.org/gpg"
           epel:
             name: "Extra Packages for Enterprise Linux 7 - x86_64"
             baseurl: "http://download.fedoraproject.org/pub/epel/7/x86_64"
@@ -50,6 +50,7 @@ resources:
           - ntpdate
           - ntp-doc
           - bind-utils
+          - lvm2
         package_upgrade: true
         write_files:
           - path: "/usr/local/bin/balduf_format"
@@ -80,13 +81,34 @@ resources:
             content: |
               [Service]
               ExecStart=
-              ExecStart=/usr/bin/dockerd --storage-driver=overlay
+              #ExecStart=/usr/bin/dockerd --storage-driver=overlay
+              ExecStart=/usr/bin/dockerd --config-file /etc/docker/daemon.json
           - path: "/usr/local/bin/ip-detect.sh"
             permissions: "0755"
             owner: "root"
             content: |
               #!/bin/sh
               curl -fsSL http://169.254.169.254/latest/meta-data/local-ipv4
+          - path: "/etc/docker/daemon.json"
+            permissions: "0600"
+            owner: "root"
+            content: |
+              {
+                "storage-driver": "devicemapper",
+                 "storage-opts": [
+                   "dm.thinpooldev=/dev/mapper/docker-thinpool",
+                   "dm.use_deferred_removal=true",
+                   "dm.use_deferred_deletion=true"
+                 ]
+              }
+          - path: "/etc/lvm/profile/docker-thinpool.profile"
+            permissions: "0644"
+            owner: "root"
+            content: |
+              activation {
+                thin_pool_autoextend_threshold=80
+                thin_pool_autoextend_percent=20
+              }
 
   otherCommands:
     type: OS::Heat::SoftwareConfig
@@ -109,6 +131,14 @@ resources:
             # allow sudo with no password
             sed -i 's/%wheel  ALL=(ALL)       ALL/#%wheel  ALL=(ALL)       ALL/g' /etc/sudoers
             sed -i 's/# %wheel        ALL=(ALL)       NOPASSWD: ALL/%wheel ALL=(ALL)       NOPASSWD/g' /etc/sudoers
+            #etup docker for devicemapper
+            pvcreate /dev/vdb
+            vgcreate docker /dev/vdb
+            lvcreate --wipesignatures y -n thinpool docker -l 95%VG
+            lvcreate --wipesignatures y -n thinpoolmeta docker -l 1%VG
+            lvconvert -y --zero n -c 512K --thinpool docker/thinpool --poolmetadata docker/thinpoolmeta
+            lvchange --metadataprofile docker-thinpool docker/thinpool
+            lvs -o+seg_monitor
             # setup NTP
             ntpdate pool.ntp.org
             systemctl enable ntpd

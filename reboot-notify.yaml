@@ -22,7 +22,7 @@ resources:
       config: |
         #!/bin/bash
         systemctl enable heat_notify_done.service
-        sleep 30
+        sleep 15
         reboot
 
   notify_done_service:

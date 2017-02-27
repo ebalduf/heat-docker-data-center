@@ -20,6 +20,10 @@ parameters:
     type: number
   default_username:
     type: string
+  UCP_version:
+    type: string
+  DTR_version:
+    type: string
 
 resources:
   key_pair:
@@ -63,12 +67,16 @@ resources:
       - name: the_usernodes
       - name: DTRnode_names
       - name: cluster_name
+      - name: UCP_version
+      - name: DTR_version
       config: |
         #!/usr/bin/bash
+        set -x
         PRIVATE_IP=$(curl -fsSL http://169.254.169.254/latest/meta-data/local-ipv4)
         PUBLIC_IP=$(curl -fsSL http://169.254.169.254/latest/meta-data/public-ipv4)
-        #exit 0
-        docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:2.0.2 install --host-address $PRIVATE_IP -san ddc-1 --san $PUBLIC_IP --admin-username admin --admin-password solidfire 
+        # get our docker license key
+        wget http://172.27.156.236:8080/v1/AUTH_7ce1fcab9a1b4b4d8dc573d5e6aa9263/Docker/license1.lic -o /root/license1.lic
+        docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock -v /root/license1.lic:/config/docker_subscription.lic docker/ucp:${UCP_version} install --host-address $PRIVATE_IP --san $PUBLIC_IP --admin-username admin --admin-password solidfire
         docker swarm join-token manager | tail -n +3 > /tmp/manager_join
         docker swarm join-token worker | tail -n +3 > /tmp/worker_join
         chmod 700 /tmp/manager_join /tmp/worker_join
@@ -86,16 +94,19 @@ resources:
                                                       sudo chown root.root /tmp/worker_join;
                                                       sudo bash /tmp/worker_join '
         done
-        for dtrn in `echo $DTRnode_names | sed 's|\[||g;s|]||g;s|u'\''||g;s|'\''||g;s| ||g;s|,|\n|g'`; do
-          echo "Installing DTR on node: " $dtrn
-          docker run --rm docker/dtr install --dtr-external-url https://ddc-4.pm.solidfire.net --ucp-node $dtrn.pm.solidfire.net -ucp-username admin --ucp-password solidfire --ucp-insecure-tls --ucp-url https://${PUBLIC_IP}
-        done
         for usernode in `echo $the_usernodes | sed 's|\[||g;s|]||g;s|u'\''||g;s|'\''||g;s| ||g;s|,|\n|g'`; do
           echo "Connecting DDC User node: " $usernode
           scp -o StrictHostKeyChecking=no /tmp/worker_join $user@$usernode:/tmp/worker_join
           ssh -o StrictHostKeyChecking=no $user@$usernode 'chmod 700 /tmp/worker_join;sudo chown root.root /tmp/worker_join; 
                                                            sudo chown root.root /tmp/worker_join;
                                                            sudo bash /tmp/worker_join '
+        done
+        REPLICA_ID=$(cat /dev/urandom | tr -cd 'a-f0-9' | head -c 12)
+        # seems like we need to wait a bit for things to be ready.
+        sleep 20
+        for dtrn in `echo $DTRnode_names | sed 's|\[||g;s|]||g;s|u'\''||g;s|'\''||g;s| ||g;s|,|\n|g'`; do
+          echo "Installing DTR on node: " $dtrn
+          docker run --rm docker/dtr:${DTR_version} install --dtr-external-url https://$dtrn.pm.solidfire.net --ucp-node $dtrn.pm.solidfire.net -ucp-username admin --ucp-password solidfire --ucp-insecure-tls --ucp-url https://$(hostname) --replica-id ${REPLICA_ID}
         done
 
   deploy_ddc:
@@ -116,6 +127,8 @@ resources:
         the_usernodes: { get_attr: [ DDC_user_nodes, public_ip ] }
         DTRnode_names: { get_attr: [ DDC_DTR_group, servername ] }
         cluster_name: { get_param: 'OS::stack_name' }
+        UCP_version: { get_param: UCP_version }
+        DTR_version: { get_param: DTR_version }
 
   ddc_sg:
     type: OS::Neutron::SecurityGroup
@@ -123,9 +136,9 @@ resources:
       name:
         str_replace:
           params:
-            __prefix__: "ddc_sg"
+            __prefix__: "sg"
             __id__: { get_param: "OS::stack_name" }
-          template: __prefix__-__id__
+          template: __id__-__prefix__
       description: Ports for DDC
       rules:
       - protocol: tcp
@@ -150,11 +163,18 @@ resources:
             - "default"
             - str_replace:
                  params:
-                   __prefix__: "ddc_sg"           
+                   __prefix__: "sg"
                    __id__: { get_param: "OS::stack_name" }
-                 template: __prefix__-__id__
+                 template: __id__-__prefix__
             network: { get_param: network }
             root_size: { get_param: root_size }
+            server_name:
+              str_replace:
+                 params:
+                    __type__: "dtr"
+                    __id__: { get_param: "OS::stack_name" }
+                    __index__: "%index%"
+                 template: __id__-__type__-__index__
 
   DDC_master_group:
     type: OS::Heat::ResourceGroup
@@ -171,11 +191,18 @@ resources:
             - "default"
             - str_replace:
                  params:
-                   __prefix__: "ddc_sg"           
+                   __prefix__: "sg"
                    __id__: { get_param: "OS::stack_name" }
-                 template: __prefix__-__id__
+                 template: __id__-__prefix__
             network: { get_param: network }
             root_size: { get_param: root_size }
+            server_name:
+              str_replace:
+                 params:
+                    __type__: "master"
+                    __id__: { get_param: "OS::stack_name" }
+                    __index__: "%index%"
+                 template: __id__-__type__-__index__
 
   DDC_user_nodes:
     type: OS::Heat::ResourceGroup
@@ -192,11 +219,18 @@ resources:
             - "default"
             - str_replace:
                  params:
-                   __prefix__: "ddc_sg"           
+                   __prefix__: "sg"
                    __id__: { get_param: "OS::stack_name" }
-                 template: __prefix__-__id__
+                 template: __id__-__prefix__
             network: { get_param: network }
             root_size: { get_param: root_size }
+            server_name:
+              str_replace:
+                 params:
+                    __type__: "user"
+                    __id__: { get_param: "OS::stack_name" }
+                    __index__: "%index%"
+                 template: __id__-__type__-__index__
 
 outputs:
  master_ip:

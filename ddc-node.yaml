@@ -31,6 +31,8 @@ parameters:
   data_volume_type:
     type: string
     default: solidfire
+  server_name:
+    type: string
 
 resources:
   root_vol:
@@ -39,6 +41,12 @@ resources:
       volume_type: { get_param: root_type }
       image: { get_param: image }
       size: { get_param: root_size }
+      name: 
+        str_replace:
+          params:
+            __type__: "root"
+            __name__: { get_param: server_name }
+          template: __name__-__type__
 
   wait_cloud_init_done:
     type: OS::Heat::WaitCondition
@@ -91,12 +99,19 @@ resources:
         - network: { get_param: network }
       user_data_format: SOFTWARE_CONFIG
       user_data: { get_resource: server_init }
+      name: { get_param: server_name }
 
   datavolume:
     type: OS::Cinder::Volume
     properties:
       size: { get_param: data_volume_size }
       volume_type: { get_param: data_volume_type }
+      name: 
+        str_replace:
+          params:
+            __type__: "data"
+            __name__: { get_param: server_name }
+          template: __name__-__type__
 
   volume_attachment:
     type: OS::Cinder::VolumeAttachment
@@ -115,6 +130,50 @@ resources:
     properties:
       floating_ip: { get_resource: floatingip }
       server_id: { get_resource: server }
+
+  resgister_dns:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: script
+      config: |
+        #!/usr/bin/bash
+        HOSTNAME=$(curl -fsSL http://169.254.169.254/latest/meta-data/hostname);
+        PUBLIC_IP=$(curl -fsSL http://169.254.169.254/latest/meta-data/public-ipv4)
+        # our DNS is open, so send an update
+        echo "Updating DNS w/:  update add $HOSTNAME 7200 A $PUBLIC_IP"
+        nsupdate << EOF
+        update add $HOSTNAME 7200 A $PUBLIC_IP
+        send
+        EOF
+        
+  deploy_register_dns:
+    type: OS::Heat::SoftwareDeployment
+    depends_on: wait_cloud_init_done
+    depends_on: floatingipassoc
+    properties:
+      actions: [ 'CREATE' ]
+      config: { get_resource: resgister_dns }
+      server: { get_resource: server }
+
+  unregister_dns:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: script
+      config: |
+        #!/usr/bin/bash
+        HOSTNAME=$(curl -fsSL http://169.254.169.254/latest/meta-data/hostname);
+        nsupdate << EOF
+        update delete $HOSTNAME A
+        send
+        EOF
+        
+  deploy_unregister_dns:
+    type: OS::Heat::SoftwareDeployment
+    depends_on: [ floatingipassoc, server, floatingip ]
+    properties:
+      actions: [ 'DELETE' ]
+      config: { get_resource: unregister_dns }
+      server: { get_resource: server }
 
 outputs:
   server:

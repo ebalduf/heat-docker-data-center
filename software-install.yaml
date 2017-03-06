@@ -23,21 +23,21 @@ resources:
         yum_repos:
           docker:
             name: "Docker Repository"
-            baseurl: "https://yum.dockerproject.org/repo/main/centos/7/"
+            baseurl: "https://packages.docker.com/1.13/yum/repo/main/centos/7"
             enabled: true
             gpgcheck: true
-            gpgkey: "https://yum.dockerproject.org/gpg"
+            gpgkey: "http://172.27.156.236:8080/v1/AUTH_7ce1fcab9a1b4b4d8dc573d5e6aa9263/Docker/docker.pgp"
           epel:
             name: "Extra Packages for Enterprise Linux 7 - x86_64"
             baseurl: "http://download.fedoraproject.org/pub/epel/7/x86_64"
             enabled: true
             gpgcheck: true
             gpgkey: "https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-7"
+            timeout: 60
+            skip_broken: 1
         packages:
-          - epel-release
           - docker-engine
           - iscsi-initiator-utils
-          - jq
           - wget
           - git
           - golang
@@ -52,7 +52,6 @@ resources:
           - bind-utils
           - lvm2
           - tree
-        package_upgrade: true
         write_files:
           - path: "/usr/local/bin/balduf_format"
             owner: "root"

@@ -75,7 +75,7 @@ resources:
         PRIVATE_IP=$(curl -fsSL http://169.254.169.254/latest/meta-data/local-ipv4)
         PUBLIC_IP=$(curl -fsSL http://169.254.169.254/latest/meta-data/public-ipv4)
         # get our docker license key
-        wget http://172.27.156.236:8080/v1/AUTH_7ce1fcab9a1b4b4d8dc573d5e6aa9263/Docker/license1.lic -o /root/license1.lic
+        curl http://172.27.156.236:8080/v1/AUTH_7ce1fcab9a1b4b4d8dc573d5e6aa9263/Docker/license1.lic -o /root/license1.lic
         docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock -v /root/license1.lic:/config/docker_subscription.lic docker/ucp:${UCP_version} install --host-address $PRIVATE_IP --san $PUBLIC_IP --admin-username admin --admin-password solidfire
         docker swarm join-token manager | tail -n +3 > /tmp/manager_join
         docker swarm join-token worker | tail -n +3 > /tmp/worker_join
@@ -104,9 +104,11 @@ resources:
         REPLICA_ID=$(cat /dev/urandom | tr -cd 'a-f0-9' | head -c 12)
         # seems like we need to wait a bit for things to be ready.
         sleep 20
-        for dtrn in `echo $DTRnode_names | sed 's|\[||g;s|]||g;s|u'\''||g;s|'\''||g;s| ||g;s|,|\n|g'`; do
+        DTR_MASTER=$(echo $DTRnode_names | sed 's|\[||g;s|]||g;s|u'\''||g;s|'\''||g;s| ||g;s|,|\n|g' | head -1)
+        docker run --rm docker/dtr:${DTR_version} install --dtr-external-url https://$DTR_MASTER.pm.solidfire.net --ucp-node $DTR_MASTER.pm.solidfire.net -ucp-username admin --ucp-password solidfire --ucp-insecure-tls --ucp-url https://$(hostname) --replica-id ${REPLICA_ID}
+        for dtrn in `echo $DTRnode_names | sed 's|\[||g;s|]||g;s|u'\''||g;s|'\''||g;s| ||g;s|,|\n|g' | tail -n +2`; do
           echo "Installing DTR on node: " $dtrn
-          docker run --rm docker/dtr:${DTR_version} install --dtr-external-url https://$dtrn.pm.solidfire.net --ucp-node $dtrn.pm.solidfire.net -ucp-username admin --ucp-password solidfire --ucp-insecure-tls --ucp-url https://$(hostname) --replica-id ${REPLICA_ID}
+          docker run --rm docker/dtr:${DTR_version} join --ucp-node $dtrn.pm.solidfire.net -ucp-username admin --ucp-password solidfire --ucp-insecure-tls --ucp-url https://$(hostname) --existing-replica-id ${REPLICA_ID}
         done
 
   deploy_ddc:

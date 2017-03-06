@@ -70,37 +70,37 @@ resources:
                   data = json.load(data_file)
 
               print unicode(data[args.field])
-          - path: "/etc/modules-load.d/overlay.conf"
-            permissions: "0644"
-            owner: "root"
-            content: |
-              overlay
+#          - path: "/etc/modules-load.d/overlay.conf"
+#            permissions: "0644"
+#            owner: "root"
+#            content: |
+#              overlay
           - path: "/etc/systemd/system/docker.service.d/override.conf"
             permissions: "0644"
             owner: "root"
             content: |
               [Service]
               ExecStart=
-              ExecStart=/usr/bin/dockerd --storage-driver=overlay
-              #ExecStart=/usr/bin/dockerd --config-file /etc/docker/daemon.json
+              #ExecStart=/usr/bin/dockerd --storage-driver=overlay
+              ExecStart=/usr/bin/dockerd --config-file /etc/docker/daemon.json
           - path: "/usr/local/bin/ip-detect.sh"
             permissions: "0755"
             owner: "root"
             content: |
               #!/bin/sh
               curl -fsSL http://169.254.169.254/latest/meta-data/local-ipv4
-#          - path: "/etc/docker/daemon.json"
-#            permissions: "0600"
-#            owner: "root"
-#            content: |
-#              {
-#                "storage-driver": "devicemapper",
-#                 "storage-opts": [
-#                   "dm.thinpooldev=/dev/mapper/docker-thinpool",
-#                   "dm.use_deferred_removal=true",
-#                   "dm.use_deferred_deletion=true"
-#                 ]
-#              }
+          - path: "/etc/docker/daemon.json"
+            permissions: "0600"
+            owner: "root"
+            content: |
+              {
+                "storage-driver": "devicemapper",
+                 "storage-opts": [
+                   "dm.thinpooldev=/dev/mapper/docker-thinpool",
+                   "dm.use_deferred_removal=true",
+                   "dm.use_deferred_deletion=true"
+                 ]
+              }
           - path: "/etc/lvm/profile/docker-thinpool.profile"
             permissions: "0644"
             owner: "root"
@@ -132,14 +132,14 @@ resources:
             # allow sudo with no password
             sed -i 's/%wheel  ALL=(ALL)       ALL/#%wheel  ALL=(ALL)       ALL/g' /etc/sudoers
             sed -i 's/# %wheel        ALL=(ALL)       NOPASSWD: ALL/%wheel ALL=(ALL)       NOPASSWD/g' /etc/sudoers
-            #etup docker for devicemapper
-            #pvcreate /dev/vdb
-            #vgcreate docker /dev/vdb
-            #lvcreate --wipesignatures y -n thinpool docker -l 95%VG
-            #lvcreate --wipesignatures y -n thinpoolmeta docker -l 1%VG
-            #lvconvert -y --zero n -c 512K --thinpool docker/thinpool --poolmetadata docker/thinpoolmeta
-            #lvchange --metadataprofile docker-thinpool docker/thinpool
-            #lvs -o+seg_monitor
+            #setup docker for devicemapper
+            pvcreate /dev/vdb
+            vgcreate docker /dev/vdb
+            lvcreate --wipesignatures y -n thinpool docker -l 95%VG
+            lvcreate --wipesignatures y -n thinpoolmeta docker -l 1%VG
+            lvconvert -y --zero n -c 512K --thinpool docker/thinpool --poolmetadata docker/thinpoolmeta
+            lvchange --metadataprofile docker-thinpool docker/thinpool
+            lvs -o+seg_monitor
             # setup NTP
             ntpdate pool.ntp.org
             systemctl enable ntpd

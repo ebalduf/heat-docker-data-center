@@ -74,6 +74,7 @@ resources:
         set -x
         PRIVATE_IP=$(curl -fsSL http://169.254.169.254/latest/meta-data/local-ipv4)
         PUBLIC_IP=$(curl -fsSL http://169.254.169.254/latest/meta-data/public-ipv4)
+        docker plugin install store/netapp/ndvp-plugin:1.4.0 --alias netapp --grant-all-permissions
         # get our docker license key
         curl http://172.27.156.236:8080/v1/AUTH_7ce1fcab9a1b4b4d8dc573d5e6aa9263/Docker/license1.lic -o /root/license1.lic
         docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock -v /root/license1.lic:/config/docker_subscription.lic docker/ucp:${UCP_version} install --host-address $PRIVATE_IP --san $PUBLIC_IP --admin-username admin --admin-password solidfire
@@ -85,21 +86,24 @@ resources:
           scp -o StrictHostKeyChecking=no /tmp/manager_join $user@$master:/tmp/manager_join
           ssh -o StrictHostKeyChecking=no $user@$master 'chmod 700 /tmp/manager_join;sudo chown root.root /tmp/manager_join; 
                                                          sudo chown root.root /tmp/manager_join;
-                                                         sudo bash /tmp/manager_join '
+                                                         sudo bash /tmp/manager_join;
+                                                         docker plugin install store/netapp/ndvp-plugin:1.4.0 --alias netapp --grant-all-permissions '
         done
         for dtr in `echo $the_DTRs | sed 's|\[||g;s|]||g;s|u'\''||g;s|'\''||g;s| ||g;s|,|\n|g'`; do
           echo "Connecting DDC DTR node: " $dtr
           scp -o StrictHostKeyChecking=no /tmp/worker_join $user@$dtr:/tmp/worker_join
           ssh -o StrictHostKeyChecking=no $user@$dtr 'chmod 700 /tmp/worker_join;sudo chown root.root /tmp/worker_join; 
                                                       sudo chown root.root /tmp/worker_join;
-                                                      sudo bash /tmp/worker_join '
+                                                      sudo bash /tmp/worker_join;
+                                                      docker plugin install store/netapp/ndvp-plugin:1.4.0 --alias netapp --grant-all-permissions '
         done
         for usernode in `echo $the_usernodes | sed 's|\[||g;s|]||g;s|u'\''||g;s|'\''||g;s| ||g;s|,|\n|g'`; do
           echo "Connecting DDC User node: " $usernode
           scp -o StrictHostKeyChecking=no /tmp/worker_join $user@$usernode:/tmp/worker_join
           ssh -o StrictHostKeyChecking=no $user@$usernode 'chmod 700 /tmp/worker_join;sudo chown root.root /tmp/worker_join; 
                                                            sudo chown root.root /tmp/worker_join;
-                                                           sudo bash /tmp/worker_join '
+                                                           sudo bash /tmp/worker_join;
+                                                           docker plugin install store/netapp/ndvp-plugin:1.4.0 --alias netapp --grant-all-permissions '
         done
         REPLICA_ID=$(cat /dev/urandom | tr -cd 'a-f0-9' | head -c 12)
         # seems like we need to wait a bit for things to be ready.

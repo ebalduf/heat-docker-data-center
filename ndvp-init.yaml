@@ -25,7 +25,7 @@ resources:
       cloud_config:
         merge_how: 'dict(recurse_array,no_replace)+list(append)'
         write_files:
-          - path: "/etc/ndvp-solidfire-san.json"
+          - path: "/etc/netappdvp/config.json"
             permissions: "0644"
             owner: "root"
             content:
@@ -71,32 +71,6 @@ resources:
                   n_endpoint: { get_param: dvp_endpoint }
                   n_svip: { get_param: dvp_svip }
                   n_account: { get_param: dvp_account }
-          - path: "/etc/systemd/system/ndvp.service"
-            permissions: "0644"
-            owner: "root"
-            content: |
-              [Install]
-              WantedBy=multi-user.target
-        
-              [Unit]
-              Description=nDVP service
-              Before=docker.service
-              After=iscsid.service network.target
-              Requires=docker.service
-        
-              [Service]
-              Restart=always
-              # --- build latest
-              ExecStartPre=-/usr/bin/mkdir -p /root/go-work
-              Environment=GOPATH=/root/go-work
-              ExecStartPre=-/usr/bin/go get -u github.com/NetApp/netappdvp
-              ExecStart=/root/go-work/bin/netappdvp --port=27609 --config=/etc/ndvp-solidfire-san.json
-              # --- use a release
-              #ExecStartPre=-/usr/bin/mkdir -p /netapp
-              #ExecStartPre=-/usr/bin/wget https://github.com/NetApp/netappdvp/releases/download/v1.3/netappdvp-1.3.tar.gz -O /tmp/netappdvp-1.3.tar.gz
-              #ExecStartPre=-/usr/bin/tar -zxvf /tmp/netappdvp-1.3.tar.gz -C /netapp
-              #ExecStartPre=-/bin/chown root.root /netapp/netappdvp
-              #ExecStart=/netapp/netappdvp --port=27609 --config=/etc/ndvp-solidfire-san.json
 
   ndvpCommands:
     type: OS::Heat::SoftwareConfig
@@ -106,9 +80,8 @@ resources:
           template: |
             #!/bin/bash
             # setup the DVPs
-            systemctl daemon-reload
-            systemctl enable ndvp
-            systemctl start ndvp
+            # we can not do this here. Docker is not running yet. 
+            # docker plugin install store/netapp/ndvp-plugin:1.4.0 --alias netapp --grant-all-permissions
           params:
             dummy-param: dummy
 

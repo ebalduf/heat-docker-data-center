@@ -69,51 +69,8 @@ resources:
       - name: cluster_name
       - name: UCP_version
       - name: DTR_version
-      config: |
-        #!/usr/bin/bash
-        set -x
-        PRIVATE_IP=$(curl -fsSL http://169.254.169.254/latest/meta-data/local-ipv4)
-        PUBLIC_IP=$(curl -fsSL http://169.254.169.254/latest/meta-data/public-ipv4)
-        docker plugin install store/netapp/ndvp-plugin:1.4.0 --alias netapp --grant-all-permissions
-        # get our docker license key
-        curl http://172.27.156.236:8080/v1/AUTH_7ce1fcab9a1b4b4d8dc573d5e6aa9263/Docker/license1.lic -o /root/license1.lic
-        docker run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock -v /root/license1.lic:/config/docker_subscription.lic docker/ucp:${UCP_version} install --host-address $PRIVATE_IP --san $PUBLIC_IP --admin-username admin --admin-password solidfire
-        docker swarm join-token manager | tail -n +3 > /tmp/manager_join
-        docker swarm join-token worker | tail -n +3 > /tmp/worker_join
-        chmod 700 /tmp/manager_join /tmp/worker_join
-        for master in `echo $the_masters | sed 's|\[||g;s|]||g;s|u'\''||g;s|'\''||g;s| ||g;s|,|\n|g' | grep -v $PUBLIC_IP`; do
-          echo "Connecting DDC master node: " $master
-          scp -o StrictHostKeyChecking=no /tmp/manager_join $user@$master:/tmp/manager_join
-          ssh -o StrictHostKeyChecking=no $user@$master 'chmod 700 /tmp/manager_join;sudo chown root.root /tmp/manager_join; 
-                                                         sudo chown root.root /tmp/manager_join;
-                                                         sudo bash /tmp/manager_join;
-                                                         docker plugin install store/netapp/ndvp-plugin:1.4.0 --alias netapp --grant-all-permissions '
-        done
-        for dtr in `echo $the_DTRs | sed 's|\[||g;s|]||g;s|u'\''||g;s|'\''||g;s| ||g;s|,|\n|g'`; do
-          echo "Connecting DDC DTR node: " $dtr
-          scp -o StrictHostKeyChecking=no /tmp/worker_join $user@$dtr:/tmp/worker_join
-          ssh -o StrictHostKeyChecking=no $user@$dtr 'chmod 700 /tmp/worker_join;sudo chown root.root /tmp/worker_join; 
-                                                      sudo chown root.root /tmp/worker_join;
-                                                      sudo bash /tmp/worker_join;
-                                                      docker plugin install store/netapp/ndvp-plugin:1.4.0 --alias netapp --grant-all-permissions '
-        done
-        for usernode in `echo $the_usernodes | sed 's|\[||g;s|]||g;s|u'\''||g;s|'\''||g;s| ||g;s|,|\n|g'`; do
-          echo "Connecting DDC User node: " $usernode
-          scp -o StrictHostKeyChecking=no /tmp/worker_join $user@$usernode:/tmp/worker_join
-          ssh -o StrictHostKeyChecking=no $user@$usernode 'chmod 700 /tmp/worker_join;sudo chown root.root /tmp/worker_join; 
-                                                           sudo chown root.root /tmp/worker_join;
-                                                           sudo bash /tmp/worker_join;
-                                                           docker plugin install store/netapp/ndvp-plugin:1.4.0 --alias netapp --grant-all-permissions '
-        done
-        REPLICA_ID=$(cat /dev/urandom | tr -cd 'a-f0-9' | head -c 12)
-        # seems like we need to wait a bit for things to be ready.
-        sleep 20
-        DTR_MASTER=$(echo $DTRnode_names | sed 's|\[||g;s|]||g;s|u'\''||g;s|'\''||g;s| ||g;s|,|\n|g' | head -1)
-        docker run --rm docker/dtr:${DTR_version} install --dtr-external-url https://$DTR_MASTER.pm.solidfire.net --ucp-node $DTR_MASTER.pm.solidfire.net -ucp-username admin --ucp-password solidfire --ucp-insecure-tls --ucp-url https://$(hostname) --replica-id ${REPLICA_ID}
-        for dtrn in `echo $DTRnode_names | sed 's|\[||g;s|]||g;s|u'\''||g;s|'\''||g;s| ||g;s|,|\n|g' | tail -n +2`; do
-          echo "Installing DTR on node: " $dtrn
-          docker run --rm docker/dtr:${DTR_version} join --ucp-node $dtrn.pm.solidfire.net -ucp-username admin --ucp-password solidfire --ucp-insecure-tls --ucp-url https://$(hostname) --existing-replica-id ${REPLICA_ID}
-        done
+      config: 
+        get_file: ddc-config.sh
 
   deploy_ddc:
     type: OS::Heat::SoftwareDeployment

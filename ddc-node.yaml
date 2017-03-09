@@ -1,4 +1,4 @@
-heat_template_version: 2016-04-08
+heat_template_version: 2016-10-14
 
 description: >
   Heat Template to start a CentOS VM, install docker,
@@ -33,6 +33,25 @@ parameters:
     default: solidfire
   server_name:
     type: string
+  subnet:
+    type: string
+  port:
+    type: number
+    default: 443
+  lb_pool:
+    type: string
+    default: 'no-loadbalancer'
+
+conditions:
+  include_in_lb:
+     not:
+       equals: 
+        - {get_param: lb_pool}
+        - 'no-loadbalancer'
+  include_in_dns:
+       equals: 
+        - {get_param: lb_pool}
+        - 'no-loadbalancer'
 
 resources:
   root_vol:
@@ -122,17 +141,20 @@ resources:
 
   floatingip:
     type: OS::Nova::FloatingIP
+    condition: include_in_dns
     properties:
       pool: { get_param: public_network }
 
   floatingipassoc:
     type: OS::Nova::FloatingIPAssociation
+    condition: include_in_dns
     properties:
       floating_ip: { get_resource: floatingip }
       server_id: { get_resource: server }
 
   resgister_dns:
     type: OS::Heat::SoftwareConfig
+    condition: include_in_dns
     properties:
       group: script
       config: |
@@ -150,6 +172,7 @@ resources:
     type: OS::Heat::SoftwareDeployment
     depends_on: wait_cloud_init_done
     depends_on: floatingipassoc
+    condition: include_in_dns
     properties:
       actions: [ 'CREATE' ]
       config: { get_resource: resgister_dns }
@@ -157,6 +180,7 @@ resources:
 
   unregister_dns:
     type: OS::Heat::SoftwareConfig
+    condition: include_in_dns
     properties:
       group: script
       config: |
@@ -169,11 +193,21 @@ resources:
         
   deploy_unregister_dns:
     type: OS::Heat::SoftwareDeployment
+    condition: include_in_dns
     depends_on: [ floatingipassoc, server, floatingip ]
     properties:
       actions: [ 'DELETE' ]
       config: { get_resource: unregister_dns }
       server: { get_resource: server }
+
+  lb_pool_member:
+    type: OS::Neutron::LBaaS::PoolMember
+    condition: include_in_lb
+    properties:
+      address: { get_attr: [ server, networks, { get_param: network }, 0]}
+      pool: { get_param: lb_pool }
+      protocol_port: { get_param: port }
+      subnet: { get_param: subnet }
 
 outputs:
   server:
@@ -181,6 +215,7 @@ outputs:
     value: { get_resource: server }
   public_ip:
     description: Server Floating IP address
+    condition: include_in_dns
     value: { get_attr: [ floatingip, ip ] }
   private_ip:
     description: Server Private IP address

@@ -1,4 +1,4 @@
-heat_template_version: 2016-04-08
+heat_template_version: 2016-10-14
 
 description: >
   Heat Template to create a Docker DataCenter Cluster
@@ -16,6 +16,11 @@ parameters:
     type: string
   network:
     type: string
+  subnet:
+    type: string
+  public_network:
+    type: string
+    default: public
   root_size:
     type: number
   default_username:
@@ -69,6 +74,8 @@ resources:
       - name: cluster_name
       - name: UCP_version
       - name: DTR_version
+      - name: DTR_external_name
+      - name: DTR_external_ip
       config: 
         get_file: ddc-config.sh
 
@@ -86,9 +93,16 @@ resources:
       input_values:
         user: { get_param: default_username }
         the_masters: { get_attr: [ DDC_master_group, public_ip ] }
-        the_DTRs: { get_attr: [ DDC_DTR_group, public_ip ] }
+        the_DTRs: { get_attr: [ DDC_DTR_group, private_ip ] }
         the_usernodes: { get_attr: [ DDC_user_nodes, public_ip ] }
         DTRnode_names: { get_attr: [ DDC_DTR_group, servername ] }
+        DTR_external_name: 
+          str_replace:
+            params:
+               __type__: "dtr"
+               __id__: { get_param: "OS::stack_name" }
+            template: __id__-__type__
+        DTR_external_ip: { get_attr: [ DTR_floatingip, floating_ip_address] }
         cluster_name: { get_param: 'OS::stack_name' }
         UCP_version: { get_param: UCP_version }
         DTR_version: { get_param: DTR_version }
@@ -104,16 +118,36 @@ resources:
           template: __id__-__prefix__
       description: Ports for DDC
       rules:
+      - protocol: icmp
       - protocol: tcp
-        port_range_min: 1
-        port_range_max: 65535
-      - protocol: udp
-        port_range_min: 1
-        port_range_max: 65535
+        port_range_min: 22
+        port_range_max: 22
+      - protocol: tcp
+        port_range_min: 80
+        port_range_max: 80
+      - protocol: tcp
+        port_range_min: 443
+        port_range_max: 443
+      - protocol: tcp
+        port_range_min: 2375
+        port_range_max: 2376
+      - protocol: tcp
+        port_range_min: 4789
+        port_range_max: 4789
+      - protocol: tcp
+        port_range_min: 7946
+        port_range_max: 7946
+      - protocol: tcp
+        port_range_min: 12376
+        port_range_max: 12376
+      - protocol: tcp
+        port_range_min: 12379
+        port_range_max: 12386
 
   DDC_DTR_group:
     type: OS::Heat::ResourceGroup
     depends_on: ddc_sg
+    depends_on: DTR_lb_pool
     properties:
       count: { get_param: num_dtrs }
       resource_def:
@@ -138,6 +172,7 @@ resources:
                     __id__: { get_param: "OS::stack_name" }
                     __index__: "%index%"
                  template: __id__-__type__-__index__
+            lb_pool: { get_resource: DTR_lb_pool }
 
   DDC_master_group:
     type: OS::Heat::ResourceGroup
@@ -195,11 +230,54 @@ resources:
                     __index__: "%index%"
                  template: __id__-__type__-__index__
 
+  DTR_load_balancer:
+    type: OS::Neutron::LBaaS::LoadBalancer
+    properties:
+      vip_subnet: { get_param: subnet }
+      name: 
+        str_replace:
+          params:
+            __type__: "DTR-lb"
+            __id__: { get_param: "OS::stack_name" }
+          template: __id__-__type__
+
+  DTR_lb_listener:
+    type: OS::Neutron::LBaaS::Listener
+    properties:
+      loadbalancer: { get_resource: DTR_load_balancer }
+      protocol: "HTTPS"
+      protocol_port: 443
+      name:
+        str_replace:
+          params:
+            __type__: "DTR-lb-listen"
+            __id__: { get_param: "OS::stack_name" }
+          template: __id__-__type__
+
+  DTR_floatingip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: { get_param: public_network }
+      port_id: { get_attr: [DTR_load_balancer, vip_port_id ]}
+
+  DTR_lb_pool:
+    type: OS::Neutron::LBaaS::Pool
+    properties:
+      lb_algorithm: ROUND_ROBIN
+      listener: { get_resource: DTR_lb_listener }
+      protocol: "HTTPS"
+      name:
+        str_replace:
+          params:
+            __type__: "DTR-lb-pool"
+            __id__: { get_param: "OS::stack_name" }
+          template: __id__-__type__
+
 outputs:
  master_ip:
     value: { get_attr: [ DDC_master_group, public_ip] }
- DTR_ips:
-    value: { get_attr: [ DDC_DTR_group, public_ip] }
+ DTR_ip:
+    value: { get_attr: [ DTR_floatingip, floating_ip_address] }
  user_node_ips:
     value: { get_attr: [ DDC_user_nodes, public_ip] }
  public_key:

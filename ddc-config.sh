@@ -38,13 +38,22 @@ for usernode in `echo $the_usernodes | sed 's|\[||g;s|]||g;s|u'\''||g;s|'\''||g;
                                                    sudo bash /tmp/worker_join;
                                                    docker plugin install store/netapp/ndvp-plugin:1.4.0 --alias netapp --grant-all-permissions '
 done
+
+# Register DTR load balancer with DNS
+echo "Updating DNS w/:  update add $DTR_external_name 7200 A $DTR_external_ip"
+nsupdate << EOF
+update add ${DTR_external_name}.pm.solidfire.net 7200 A $DTR_external_ip
+send
+EOF
+
 # Create a 12 digit randome replica ID
 REPLICA_ID=$(cat /dev/urandom | tr -cd 'a-f0-9' | head -c 12)
 # seems like we need to wait a bit for things to be ready.
 sleep 20
+
 # Install the primary DTR node. 
 DTR_MASTER=$(echo $DTRnode_names | sed 's|\[||g;s|]||g;s|u'\''||g;s|'\''||g;s| ||g;s|,|\n|g' | head -1)
-docker run --rm docker/dtr:${DTR_version} install --dtr-external-url https://$DTR_MASTER.pm.solidfire.net --ucp-node $DTR_MASTER.pm.solidfire.net -ucp-username admin --ucp-password solidfire --ucp-insecure-tls --ucp-url https://$(hostname) --replica-id ${REPLICA_ID}
+docker run --rm docker/dtr:${DTR_version} install --dtr-external-url https://$DTR_external_name --ucp-node $DTR_MASTER.pm.solidfire.net -ucp-username admin --ucp-password solidfire --ucp-insecure-tls --ucp-url https://$(hostname) --replica-id ${REPLICA_ID}
 # Join (not install) the other DTRs to the main DTR via the replica ID. 
 for dtrn in `echo $DTRnode_names | sed 's|\[||g;s|]||g;s|u'\''||g;s|'\''||g;s| ||g;s|,|\n|g' | tail -n +2`; do
   echo "Installing DTR on node: " $dtrn

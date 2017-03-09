@@ -18,6 +18,7 @@ parameter_defaults:
 #  image: centos-73-software-config
   image: centos7-software-config
   network: admin_net
+  subnet: admin_subnet
   root_size: 60
   public_network: public
   root_type: solidfire

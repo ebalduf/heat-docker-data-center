@@ -10,7 +10,7 @@ parameter_defaults:
   # Put your key in here. You will be able to use the above account to login
   # This template will generate a key for the root and default user to allow necessary 
   # ssh'ing around to configure the cluster.  You will never see/use that key.
-  extra_key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDO7RGguqYOGwSN13r91URgkn04aY1rjrT7kae7s6IdCZA920dfch4Wr6mVDNNxt34T4leEhgFOcgYp649qqGPhFshIhv+CJ7YfcD8KqIxh+/WO97quwin668QsB80Tt1pSdqbIGFb8eYr5hNzFKwealuDIG9A/VSUYTp9U4hzfp6XTECA4LFTgvfw8Q32bLKFGMGmKnEizCAb9/znL/We2xnyIz1IDgviQI/3XQtcS4I0kNTyPzuwGw3GOWACYf5z67BI9kazytUfqu6/i4V1MuMyjRpsq0k4qGH3aJAKyI2LPOAfSVy7duBEwzZVFFb665TvA5yikPORy5XMeFGrnp4FPLWDlfi8Svyl+xGgNRXQdXzUzI9qzJiv+heTjOxLK/73rXDDcBpoMfRPXnvEajtySZ7W6MepSwjj/OHQGwNhynzUKP3YaosPynXn1gDsZNZ4v0fOTQR+darTpgx8mgv4wqTCvm/Z8Z9eo08jbxRckybkx/gNyDuvnUae7oLbqF77wcTHlx2u/C9nFpKe0JrfB+bH+/vwA1jEVAthFhiFx3s+6sRxL/6IBcUs37XJ93AXTEfmKA9P4GH1HE4ckxCJvEsglRHYsMScuwuRyiQuodg8HahIR7sjYeosXj/n8tnqjF6B0NCKueSrZvAfeEAY9/u2yTDdYJMgsFMWboQ== ebalduf@applelaptop.balduf.localdomain"
+  extra_key: "ssh-rsa put-your-key-here"
   num_masters: 3
   num_dtrs: 3
   num_user_nodes: 3

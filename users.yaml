@@ -41,8 +41,8 @@ resources:
           passwd: "$6$oW.qUNNr$48ynDsAwI5e67S0VmiVrvWJoPuGX7WtPluC80WfiD2DV/iarCz8ewVfEtqPiROUXIW6mkjRP5FqdZJx95becH/"
           sudo: ALL=(ALL) NOPASSWD:ALL
           ssh-authorized-keys:
-            - "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDkPxx58OlM866r7mZEALjpE0gq3qhmWK9LDjY5TRroVf8Einvji7io3zWCPWsX2lXDCxlBLm5CmN7pSlSL2C0VSTvFF8R2br3nb/wV2TLnU8fewTKuFE8PcjUf+p1zz0ZUGEKsBgG1pgK9hQOk5HzUA2N12jzR3V+QigjKibX9avUFfeutzue0DyNG7AYlTJ4OVg8zxAXjf/OAvbIStj+F4U9iqq+WYvrV/Ve4dl/Q5G+J5gLeOs2lI6kWi8Mu5MdFjVBwdivaJfzKOhiwd2BVePr7jizqnXeszD4sTMdbsIOXbTt8kgk48+CwLQhg5/qT5xwzbLcmfxZl8hGkb+vh ebalduf-LT@ebalduf-LT.local"
-            - "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDO7RGguqYOGwSN13r91URgkn04aY1rjrT7kae7s6IdCZA920dfch4Wr6mVDNNxt34T4leEhgFOcgYp649qqGPhFshIhv+CJ7YfcD8KqIxh+/WO97quwin668QsB80Tt1pSdqbIGFb8eYr5hNzFKwealuDIG9A/VSUYTp9U4hzfp6XTECA4LFTgvfw8Q32bLKFGMGmKnEizCAb9/znL/We2xnyIz1IDgviQI/3XQtcS4I0kNTyPzuwGw3GOWACYf5z67BI9kazytUfqu6/i4V1MuMyjRpsq0k4qGH3aJAKyI2LPOAfSVy7duBEwzZVFFb665TvA5yikPORy5XMeFGrnp4FPLWDlfi8Svyl+xGgNRXQdXzUzI9qzJiv+heTjOxLK/73rXDDcBpoMfRPXnvEajtySZ7W6MepSwjj/OHQGwNhynzUKP3YaosPynXn1gDsZNZ4v0fOTQR+darTpgx8mgv4wqTCvm/Z8Z9eo08jbxRckybkx/gNyDuvnUae7oLbqF77wcTHlx2u/C9nFpKe0JrfB+bH+/vwA1jEVAthFhiFx3s+6sRxL/6IBcUs37XJ93AXTEfmKA9P4GH1HE4ckxCJvEsglRHYsMScuwuRyiQuodg8HahIR7sjYeosXj/n8tnqjF6B0NCKueSrZvAfeEAY9/u2yTDdYJMgsFMWboQ== ebalduf@applelaptop.balduf.localdomain"
+            - "ssh-rsa put-your-key-here"
+            - "ssh-rsa put-your-key-here"
         write_files:
           - path: "/tmp/additional_keys"
             owner: "root"
